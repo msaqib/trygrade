@@ -1,0 +1,70 @@
+name: BST Auto-Grader
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v3
+      with:
+        python-version: 3.9
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-json-report
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+    
+    - name: Run Basic Tests (25 points)
+      id: basic_tests
+      continue-on-error: true
+      run: |
+        pytest tests/test_basic.py -v --json-report --json-report-file=basic_results.json
+        echo "basic_exit_code=$?" >> $GITHUB_OUTPUT
+    
+    - name: Run Intermediate Tests (35 points)
+      id: intermediate_tests
+      continue-on-error: true
+      run: |
+        pytest tests/test_intermediate.py -v --json-report --json-report-file=intermediate_results.json
+        echo "intermediate_exit_code=$?" >> $GITHUB_OUTPUT
+    
+    - name: Run Advanced Tests (40 points)
+      id: advanced_tests
+      continue-on-error: true
+      run: |
+        pytest tests/test_advanced.py -v --json-report --json-report-file=advanced_results.json
+        echo "advanced_exit_code=$?" >> $GITHUB_OUTPUT
+    
+    - name: Generate Grade Report
+      run: |
+        python grade_report.py
+    
+    - name: Upload Grade Report
+      uses: actions/upload-artifact@v3
+      with:
+        name: grade-report
+        path: grade_report.txt
+    
+    - name: Comment Grade on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const grade = fs.readFileSync('grade_report.txt', 'utf8');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '## 🎓 Auto-Grader Results\n\n```\n' + grade + '\n```'
+          });
